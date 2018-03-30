@@ -50,19 +50,18 @@ def istat_fat16(f, address, sector_size=512, offset=0):
     cluster_start = root_area_end + 1
     cluster_size = fsstat_fat16.get_cluster_size(boot_sector)
     f.seek(offset * sector_size + ((root_area_start * sector_size) + (address - 3) * 32))
-    direc_entry = f.read(32)
+    directory_entry = f.read(32)
 
     result.append('Directory Entry: ' + str(address))
 
-    if direc_entry[0] == 0xe5:
+    if directory_entry[0] == 0xe5:
         result.append('Not Allocated')
-    if direc_entry[0] == 0x00:
+    if directory_entry[0] == 0x00:
         result.append('Not Allocated')
     else:
         result.append('Allocated')
 
-    # TODO: refine - look into flag identities
-    attribute = direc_entry[11]
+    attribute = directory_entry[11]
     file_attribute = "File Attributes: "
     if attribute & 0x0f == 0x0f:
         file_attribute += 'Long File Name'
@@ -83,13 +82,13 @@ def istat_fat16(f, address, sector_size=512, offset=0):
             file_attribute += ", Archive"
     result.append(file_attribute)
 
-    file_size = as_unsigned(direc_entry[28:32])
+    file_size = as_unsigned(directory_entry[28:32])
     f.seek(fat_start * sector_size)
     fat = f.read(fat_size * sector_size)
     fat = fat[4:]
     count = 0
     sector_count = file_size // sector_size
-    cluster_number = fsstat_fat16.get_cluster_to_sector(as_unsigned(direc_entry[26:28]), cluster_size)
+    cluster_number = fsstat_fat16.get_cluster_to_sector(as_unsigned(directory_entry[26:28]), cluster_size)
     cluster_offset = as_unsigned(fat[cluster_number:cluster_number + 2])
     cluster_line = []
     cluster_result = []
@@ -120,7 +119,7 @@ def istat_fat16(f, address, sector_size=512, offset=0):
         for c in range(cluster_size):
             cluster_line.append(str(cluster_start + cluster_number + c))
             count += 1
-    elif not flag or direc_entry[0] == 0xe5:
+    elif not flag or directory_entry[0] == 0xe5:
         rem_size = file_size % (sector_size * cluster_size)
         num_zeroes = rem_size // sector_size + 1
         for c in range(cluster_size - num_zeroes):
@@ -134,15 +133,13 @@ def istat_fat16(f, address, sector_size=512, offset=0):
     else:
         result.append('Size: ' + str(file_size))
 
-     # TODO: check
-
-    file_ext = "".join(i for i in direc_entry[8:12].decode('ascii') if 48 < ord(i) < 127)
-    lowercase_byte = direc_entry[12]
-    if direc_entry[0] == 0xe5:
+    file_ext = "".join(i for i in directory_entry[8:12].decode('ascii') if 48 < ord(i) < 127)
+    lowercase_byte = directory_entry[12]
+    if directory_entry[0] == 0xe5:
         filename = '_'
     else:
-        filename = direc_entry[0:1].decode('ascii').strip()
-    filename += direc_entry[1:8].decode('ascii').strip()
+        filename = directory_entry[0:1].decode('ascii').strip()
+    filename += directory_entry[1:8].decode('ascii').strip()
     if lowercase_byte & 0x08:
         filename = filename.lower()
     if file_ext:
@@ -154,10 +151,10 @@ def istat_fat16(f, address, sector_size=512, offset=0):
 
     result.append('')
     result.append('Directory Entry Times:')
-    result.append('Written:\t' + decode_fat_day(direc_entry[24:26]) + " " + decode_fat_time(direc_entry[22:24]))
-    result.append('Accessed:\t' + decode_fat_day(direc_entry[18:20]) + " " + decode_fat_time(bytes.fromhex('0000')))
+    result.append('Written:\t' + decode_fat_day(directory_entry[24:26]) + " " + decode_fat_time(directory_entry[22:24]))
+    result.append('Accessed:\t' + decode_fat_day(directory_entry[18:20]) + " " + decode_fat_time(bytes.fromhex('0000')))
     result.append(
-        'Created:\t' + decode_fat_day(direc_entry[16:18]) + " " + decode_fat_time(direc_entry[14:16], direc_entry[13]))
+        'Created:\t' + decode_fat_day(directory_entry[16:18]) + " " + decode_fat_time(directory_entry[14:16], directory_entry[13]))
     result.append('')
 
     result.append('Sectors:')
@@ -169,4 +166,7 @@ def istat_fat16(f, address, sector_size=512, offset=0):
 
 
 if __name__ == '__main__':
-    pass
+    with open('adams.dd', 'rb') as f:
+        lines = istat_fat16(f, 549)
+        for line in lines:
+            print(line)
