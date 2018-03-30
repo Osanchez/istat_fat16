@@ -1,3 +1,7 @@
+# Resources
+# http://people.cs.umass.edu/~liberato/courses/2018-spring-compsci365+590f/lecture-notes/12-demonstration-parsing-fat/
+# https://piazza.com/class/jci0xnyk6xo48?cid=275
+
 import struct
 import fsstat_fat16
 
@@ -35,17 +39,21 @@ def get_root_area_end(b, root_area_start, bytes_per_sector):
     return root_area_start + (as_unsigned(b[17:19]) * 32 // bytes_per_sector) - 1
 
 
+def get_file_size(d_entry):
+    return as_unsigned(d_entry[28:32])
+
+
 def istat_fat16(f, address, sector_size=512, offset=0):
     result = []
     f.seek(offset * sector_size)
     boot_sector = f.read(sector_size)
-    fat_size = fsstat_fat16.get_fat_size(boot_sector)  # reuse old code
-    sectors_before_start = fsstat_fat16.get_sectors_start(boot_sector)  # reuse old code
-    fat_start = sectors_before_start + 1
+    sectors_before_start = fsstat_fat16.get_sectors_start(boot_sector)
+    fat_size = fsstat_fat16.get_fat_size(boot_sector)
     number_of_fats = fsstat_fat16.get_number_fats(boot_sector)
+    fat_start = sectors_before_start + 1
     reserved_area_size = fsstat_fat16.get_reserved_area_size(boot_sector)
-    root_area_start = sectors_before_start - offset + reserved_area_size + number_of_fats * fat_size
     bytes_per_sector = fsstat_fat16.get_bytes_per_sector(boot_sector)
+    root_area_start = sectors_before_start - offset + reserved_area_size + number_of_fats * fat_size
     root_area_end = get_root_area_end(boot_sector, root_area_start, bytes_per_sector)
     cluster_start = root_area_end + 1
     cluster_size = fsstat_fat16.get_cluster_size(boot_sector)
@@ -56,7 +64,7 @@ def istat_fat16(f, address, sector_size=512, offset=0):
 
     if directory_entry[0] == 0xe5:
         result.append('Not Allocated')
-    if directory_entry[0] == 0x00:
+    elif directory_entry[0] == 0x00:
         result.append('Not Allocated')
     else:
         result.append('Allocated')
@@ -82,7 +90,7 @@ def istat_fat16(f, address, sector_size=512, offset=0):
             file_attribute += ", Archive"
     result.append(file_attribute)
 
-    file_size = as_unsigned(directory_entry[28:32])
+    file_size = get_file_size(directory_entry)
     f.seek(fat_start * sector_size)
     fat = f.read(fat_size * sector_size)
     fat = fat[4:]
@@ -121,11 +129,11 @@ def istat_fat16(f, address, sector_size=512, offset=0):
             count += 1
     elif not flag or directory_entry[0] == 0xe5:
         rem_size = file_size % (sector_size * cluster_size)
-        num_zeroes = rem_size // sector_size + 1
-        for c in range(cluster_size - num_zeroes):
+        number_zeroes = rem_size // sector_size + 1
+        for c in range(cluster_size - number_zeroes):
             cluster_line.append(str(cluster_start + cluster_number + c))
             count += 1
-        for c in range(num_zeroes):
+        for c in range(number_zeroes):
             cluster_line.append("0")
             count += 1
     if file_size == 0:
@@ -154,7 +162,8 @@ def istat_fat16(f, address, sector_size=512, offset=0):
     result.append('Written:\t' + decode_fat_day(directory_entry[24:26]) + " " + decode_fat_time(directory_entry[22:24]))
     result.append('Accessed:\t' + decode_fat_day(directory_entry[18:20]) + " " + decode_fat_time(bytes.fromhex('0000')))
     result.append(
-        'Created:\t' + decode_fat_day(directory_entry[16:18]) + " " + decode_fat_time(directory_entry[14:16], directory_entry[13]))
+        'Created:\t' + decode_fat_day(directory_entry[16:18]) + " " + decode_fat_time(directory_entry[14:16],
+                                                                                      directory_entry[13]))
     result.append('')
 
     result.append('Sectors:')
